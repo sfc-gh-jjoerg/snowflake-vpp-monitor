@@ -14,3 +14,6 @@ Thumbs.db
 # Environment variables (local dev)
 .env
 .env.local
+
+# Cortex Code local state (plans, conversations, sessions)
+.snowflake/cortex/
