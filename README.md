@@ -32,28 +32,37 @@ Follow these steps in order. The whole process takes about 15 minutes.
 
 1. **Paid Snowflake account** — App Runtime is not available on trial accounts.
 
-2. **Snowflake CLI 3.19+** — Required for `snow app` commands. Older versions will fail silently or produce confusing errors.
+2. **Snowflake CLI 3.19+** — The [Snowflake CLI](https://docs.snowflake.com/en/developer-guide/snowflake-cli) (`snow`) is a command-line tool for managing Snowflake resources, including app deployment. Version 3.19+ is required for `snow app` commands — older versions will fail silently or produce confusing errors.
+
+   The easiest way to get started is to install **Cortex Code**, which bundles the Snowflake CLI and handles connection setup for you:
+   - [Cortex Code Desktop](https://docs.snowflake.com/en/user-guide/cortex-code/cortex-code-desktop) — VS Code-based IDE with built-in Snowflake integration
+   - [Cortex Code CLI](https://docs.snowflake.com/en/user-guide/cortex-code/cortex-code-cli) — terminal-based agent with Snowflake CLI included
+
+   If you prefer to install the Snowflake CLI standalone:
+   ```bash
+   # macOS (Homebrew)
+   brew install snowflake-cli
+
+   # pip
+   pip install snowflake-cli
+   ```
 
    **Check your version:**
    ```bash
    snow --version    # must show 3.19.0 or higher
    ```
 
-   **Upgrade / install:**
+   **Upgrade:**
    ```bash
-   # If installed via Homebrew (standalone)
-   brew upgrade snowflake-cli
-
-   # If installed via pip
-   pip install --upgrade snowflake-cli
-
-   # If using Cortex Code Desktop or Cortex Code CLI
-   # The Snowflake CLI is bundled — update Cortex Code itself to get the latest version
+   brew upgrade snowflake-cli    # Homebrew
+   pip install --upgrade snowflake-cli    # pip
    ```
 
    > **Tip:** If `snow --version` shows an older version despite upgrading, you may have multiple installations. Run `which snow` to confirm which binary is being used.
 
-3. **ACCOUNTADMIN access** — Needed once for initial account setup (Step 1).
+3. **Snowflake connection configured** — The Snowflake CLI needs a configured connection to your account. If you're using Cortex Code, this is handled during setup. If you installed the CLI standalone, run `snow connection add` to create a connection, or refer to the [CLI connection docs](https://docs.snowflake.com/en/developer-guide/snowflake-cli/connecting/configure-cli).
+
+4. **ACCOUNTADMIN access** — Needed once for initial account setup (Step 1).
 
 ### Step 1: One-time Account Setup (ACCOUNTADMIN)
 
