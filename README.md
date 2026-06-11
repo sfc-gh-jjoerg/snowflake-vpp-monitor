@@ -264,13 +264,20 @@ Open `notebooks/setup_data.ipynb` in the Workspace and **Run All** cells. The no
 4. Creates tables and loads data via `COPY INTO`
 5. Verifies row counts
 
-### Step 5: Initialize and Deploy
+### Step 5: Clone the Repository Locally
+
+The `snow app` CLI commands run against a local project directory. Clone the repo to your machine:
+
+```bash
+git clone https://github.com/sfc-gh-jjoerg/snowflake-vpp-monitor.git
+cd snowflake-vpp-monitor
+```
+
+### Step 6: Initialize and Deploy
 
 > **Important:** The Snowflake CLI connection you use must be configured with the **deploy role** you selected in Step 1 (e.g., `SYSADMIN`). Check with `snow connection status` — the `role` field must match.
 
 ```bash
-cd snowflake-vpp-monitor
-
 # Initialize (generates snowflake.yml)
 snow app setup --app-name="VPP_MONITOR"
 
@@ -280,7 +287,7 @@ snow app deploy
 
 First deploy takes 3-5 minutes (uploads code, builds remotely, creates service, provisions endpoint). Subsequent deploys are faster (~2 min) due to layer caching.
 
-### Step 6: Open the App
+### Step 7: Open the App
 
 ```bash
 snow app open
