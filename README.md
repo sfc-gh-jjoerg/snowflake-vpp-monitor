@@ -336,7 +336,17 @@ Drops the SPCS service and associated resources. Does **not** drop the database 
 
 ### Full cleanup
 
+Run the cleanup script to remove all demo assets (app service, artifacts, and data). This does **not** remove the account-level App Runtime setup.
+
+```bash
+snow sql -f cleanup.sql
+```
+
+Or run the SQL manually:
+
 ```sql
+USE ROLE SYSADMIN;
+
 -- Remove the app service and artifacts
 DROP APPLICATION SERVICE IF EXISTS SNOWFLAKE_APPS.PUBLIC.VPP_MONITOR;
 DROP ARTIFACT REPOSITORY IF EXISTS SNOWFLAKE_APPS.PUBLIC.VPP_MONITOR_REPO;
