@@ -6,6 +6,29 @@ This project is a self-contained getting-started guide for **Snowflake App Runti
 
 ---
 
+## What Is a Virtual Power Plant (VPP)?
+
+A **Virtual Power Plant** aggregates thousands of small, distributed energy resources — residential solar panels, home batteries, heat pumps, EV chargers — and orchestrates them as if they were a single large power plant. Instead of building a gas turbine, the provider coordinates thousands of home battery systems to absorb cheap electricity and release it when prices spike.
+
+In the real world, companies like [1KOMMA5° (Heartbeat AI)](https://1komma5grad.com/), [Sonnen](https://sonnen.de/), and [Next Kraftwerke](https://www.next-kraftwerke.com/) operate VPPs that trade on European electricity markets.
+
+**Why VPPs matter:**
+- **Revenue stream** — The provider takes a share (typically 30%) of every arbitrage margin (buy low, sell high)
+- **Customer value** — The remaining 70% goes to the customer as bill savings (typically EUR 50-150/year)
+- **Grid stability** — Distributed batteries smooth demand peaks and absorb renewable oversupply
+- **Competitive moat** — VPP enrollment increases customer stickiness across all product categories
+
+### The Data Behind This Dashboard
+
+The sample data represents a fleet of ~4,050 home battery systems across 4 German regions (North, South, East, West), serving 3 customer segments (residential, small business, commercial). Each battery's charge/discharge behavior is driven by **real day-ahead electricity prices** from the German DE-LU bidding zone — the same price signal that real VPP operators use.
+
+The dashboard visualizes:
+- **Operational metrics** — fleet capacity, battery state-of-charge, solar yield, grid import/export
+- **Market context** — day-ahead electricity price movements (EUR/MWh)
+- **Financial performance** — arbitrage margins split between customer and provider
+
+---
+
 ## What You'll Build
 
 | Section | Description |
@@ -22,14 +45,26 @@ This project is a self-contained getting-started guide for **Snowflake App Runti
 
 1. **Paid Snowflake account** — App Runtime is not available on trial accounts.
 
-2. **Snowflake CLI 3.19+** — Required for `snow app` commands. If you're using **Cortex Code Desktop** or **Cortex Code CLI**, the Snowflake CLI is already bundled.
-   ```bash
-   # macOS (Homebrew) — only needed if not using Cortex Code
-   brew install snowflake-cli    # or: brew upgrade snowflake-cli
+2. **Snowflake CLI 3.19+** — Required for `snow app` commands. Older versions will fail silently or produce confusing errors.
 
-   # Verify
-   snow --version                # must show 3.19.0 or higher
+   **Check your version:**
+   ```bash
+   snow --version    # must show 3.19.0 or higher
    ```
+
+   **Upgrade / install:**
+   ```bash
+   # If installed via Homebrew (standalone)
+   brew upgrade snowflake-cli
+
+   # If installed via pip
+   pip install --upgrade snowflake-cli
+
+   # If using Cortex Code Desktop or Cortex Code CLI
+   # The Snowflake CLI is bundled — update Cortex Code itself to get the latest version
+   ```
+
+   > **Tip:** If `snow --version` shows an older version despite upgrading, you may have multiple installations. Run `which snow` to confirm which binary is being used.
 
 3. **ACCOUNTADMIN access** — Needed once for initial account setup (Step 1).
 
@@ -66,23 +101,18 @@ Traditionally, deploying a web application to Snowpark Container Services (SPCS)
 
 ### What Happens When You Deploy
 
-```
-Your Code (Next.js + package.json)
-       |
-       v
-+--------------------------------------------------------------+
-|  snow app deploy                                             |
-|  +----------+   +--------------+   +---------------------+  |
-|  | 1. Upload|-> | 2. Remote    |-> | 3. Create/Update    |  |
-|  |    code  |   |    Docker    |   |    SPCS Service     |  |
-|  |    to    |   |    build on  |   |    with endpoint    |  |
-|  |    stage |   |    compute   |   |    bindings + DNS   |  |
-|  |          |   |    pool      |   |                     |  |
-|  +----------+   +--------------+   +---------------------+  |
-+--------------------------------------------------------------+
-       |
-       v
-Live HTTPS URL -> https://<app>-<account>.snowflakecomputing.app
+```mermaid
+flowchart LR
+    Code["Your Code\n(Next.js + package.json)"] --> Upload["1. Upload\ncode to stage"]
+    Upload --> Build["2. Remote Docker\nbuild on compute pool"]
+    Build --> Service["3. Create/Update\nSPCS Service +\nendpoint + DNS"]
+    Service --> URL["Live HTTPS URL\nhttps://app-account\n.snowflakecomputing.app"]
+
+    subgraph deploy ["snow app deploy"]
+        Upload
+        Build
+        Service
+    end
 ```
 
 **What you provide:**
@@ -100,18 +130,39 @@ Live HTTPS URL -> https://<app>-<account>.snowflakecomputing.app
 
 ### How Authentication Works
 
-```
-Browser -> HTTPS -> SPCS Service (your Next.js app)
-                       |
-                       | API route reads /snowflake/session/token
-                       v
-               Snowflake SDK connects with OAuth token
-                       |
-                       v
-               Executes SQL as the logged-in user's role
+Users access the app via **Snowflake SSO** — the same login they use for Snowsight. When a user opens the app URL, Snowflake handles authentication automatically. No passwords, API keys, or connection strings are involved.
+
+Under the hood, the runtime injects an OAuth session token into the container. The app's server-side API routes use this token to execute SQL **as the logged-in user's active role** — so existing table-level RBAC applies automatically.
+
+### Roles & Access Control
+
+App Runtime separates three concerns:
+
+| Concern | Who controls it | What it governs |
+|---------|----------------|-----------------|
+| **Deploying** | Deploy role (e.g. `SYSADMIN`) | Who can push code via `snow app deploy` |
+| **App access** | Any role granted `USAGE` | Who can open the app URL and interact with it |
+| **Data access** | Logged-in user's active role | Which tables/views the app can query at runtime |
+
+These are independent — you deploy once with your deploy role, then grant access to as many other roles as needed.
+
+**Grant another role access to the app:**
+
+```sql
+GRANT USAGE ON DATABASE SNOWFLAKE_APPS TO ROLE analyst_role;
+GRANT USAGE ON SCHEMA SNOWFLAKE_APPS.PUBLIC TO ROLE analyst_role;
+GRANT USAGE ON APPLICATION SERVICE SNOWFLAKE_APPS.PUBLIC.VPP_MONITOR TO ROLE analyst_role;
 ```
 
-No passwords, no connection strings, no secrets management.
+**Additional privileges (optional):**
+
+| Privilege | Effect |
+|-----------|--------|
+| `USAGE` | Open and use the app |
+| `OPERATE` | Suspend, resume, and upgrade the app |
+| `MONITOR` | View runtime status and container logs |
+
+> **Note:** Users granted `USAGE` on the app still need appropriate privileges on the underlying tables (`EPOWER_VPP.VPP_DATA.*`) for the dashboard to display data. If a user's role lacks `SELECT` on those tables, the app loads but shows empty charts.
 
 ### SPCS Concepts (Reference)
 
@@ -126,7 +177,7 @@ No passwords, no connection strings, no secrets management.
 
 ## Setup Guide
 
-Follow these steps in order. Steps 1-2 are one-time account setup; Steps 3-5 are the deploy workflow.
+Follow these steps in order. Steps 1-3 are one-time account setup; Steps 4-6 are the deploy workflow.
 
 ### Step 1: One-time Account Setup (ACCOUNTADMIN)
 
@@ -168,24 +219,52 @@ GRANT BIND SERVICE ENDPOINT ON ACCOUNT TO ROLE SYSADMIN;
 
 > These grants only need to be run once per account.
 
-### Step 3: Load Sample Data
+### Step 3: Create Snowflake Workspace from Git
 
-Open the notebook `notebooks/setup_data.ipynb` in a **Snowsight Workspace** (or run locally with a Jupyter kernel connected to Snowflake) and execute all cells. The notebook:
+Creating a Workspace from the Git repository gives you immediate access to all files — notebooks, CSV data, and app source code — directly in Snowsight. No manual file uploads needed.
+
+**3a. Create GitHub API Integration (one-time, ACCOUNTADMIN):**
+
+Snowflake Workspaces connect to Git repositories via an API integration. If your account already has one, skip to 3b.
+
+```sql
+USE ROLE ACCOUNTADMIN;
+
+CREATE OR REPLACE API INTEGRATION github_api_integration
+    API_PROVIDER = git_https_api
+    API_ALLOWED_PREFIXES = ('https://github.com/')
+    ENABLED = TRUE;
+
+GRANT USAGE ON INTEGRATION github_api_integration TO ROLE SYSADMIN;
+```
+
+To verify an existing integration:
+```sql
+SHOW API INTEGRATIONS;
+DESCRIBE INTEGRATION github_api_integration;
+```
+
+**3b. Create the Workspace:**
+
+1. Navigate to **Projects » Workspaces** in Snowsight
+2. Click **+ Workspace** → **Create Workspace from Git Repository**
+3. Enter repository URL: `https://github.com/sfc-gh-jjoerg/snowflake-vpp-monitor` (or your fork's URL)
+4. Select API integration: `github_api_integration`
+5. Click **Create**
+
+The workspace clones the repository into Snowflake, making all files (notebooks, CSV data, app source) available directly in Snowsight.
+
+### Step 4: Load Sample Data
+
+Open `notebooks/setup_data.ipynb` in the Workspace and **Run All** cells. The notebook:
 
 1. Creates database `EPOWER_VPP` and schema `VPP_DATA`
 2. Creates an internal stage
-3. Instructs you to upload the 3 CSV files from `data/`
+3. Uploads the CSV files from the workspace `data/` folder to the stage (automatic — no manual upload needed)
 4. Creates tables and loads data via `COPY INTO`
 5. Verifies row counts
 
-Alternatively, upload the CSVs via Snow CLI:
-```bash
-snow stage put data/vpp_monitor_timeseries.csv @EPOWER_VPP.VPP_DATA.DATA_STAGE --overwrite
-snow stage put data/vpp_monitor_actions.csv @EPOWER_VPP.VPP_DATA.DATA_STAGE --overwrite
-snow stage put data/vpp_monitor_kpi.csv @EPOWER_VPP.VPP_DATA.DATA_STAGE --overwrite
-```
-
-### Step 4: Initialize and Deploy
+### Step 5: Initialize and Deploy
 
 > **Important:** The Snowflake CLI connection you use must be configured with the **deploy role** you selected in Step 1 (e.g., `SYSADMIN`). Check with `snow connection status` — the `role` field must match.
 
@@ -201,7 +280,7 @@ snow app deploy
 
 First deploy takes 3-5 minutes (uploads code, builds remotely, creates service, provisions endpoint). Subsequent deploys are faster (~2 min) due to layer caching.
 
-### Step 5: Open the App
+### Step 6: Open the App
 
 ```bash
 snow app open
@@ -293,29 +372,26 @@ Open http://localhost:3000. The app detects it's not in SPCS and falls back to p
 
 ## Architecture
 
-```
-Browser (Dark Mode Dashboard)
-       |
-       |  fetch /api/kpis, /api/timeseries, /api/actions
-       v
-+------------------------------------------------------------------+
-|  Next.js App (SPCS Container)                                    |
-|  +-- src/app/page.tsx            <- React dashboard (client)     |
-|  +-- src/app/api/kpis/route.ts   <- Server-side, queries SF      |
-|  +-- src/app/api/timeseries/     <- Server-side, queries SF      |
-|  +-- src/app/api/actions/        <- Server-side, queries SF      |
-|                                                                  |
-|  Authentication: /snowflake/session/token (OAuth)                |
-+------------------------------------------------------------------+
-       |
-       |  Snowflake SDK (snowflake-sdk)
-       v
-+------------------------------------------------------------------+
-|  EPOWER_VPP.VPP_DATA                                             |
-|  +-- VPP_MONITOR_TIMESERIES   (5,760 rows — hourly capacity)    |
-|  +-- VPP_MONITOR_ACTIONS      (2,352 rows — battery actions)    |
-|  +-- VPP_MONITOR_KPI          (720 rows — summary metrics)      |
-+------------------------------------------------------------------+
+```mermaid
+flowchart TB
+    Browser["Browser (Dark Mode Dashboard)"]
+    Browser -->|"fetch /api/kpis, /api/timeseries, /api/actions"| NextJS
+
+    subgraph NextJS ["Next.js App (SPCS Container)"]
+        Page["src/app/page.tsx — React dashboard"]
+        API_KPI["src/app/api/kpis/route.ts"]
+        API_TS["src/app/api/timeseries/route.ts"]
+        API_ACT["src/app/api/actions/route.ts"]
+        Auth["Auth: /snowflake/session/token (OAuth)"]
+    end
+
+    NextJS -->|"Snowflake SDK (snowflake-sdk)"| Data
+
+    subgraph Data ["EPOWER_VPP.VPP_DATA"]
+        T1["VPP_MONITOR_TIMESERIES (5,760 rows)"]
+        T2["VPP_MONITOR_ACTIONS (2,352 rows)"]
+        T3["VPP_MONITOR_KPI (720 rows)"]
+    end
 ```
 
 ---
